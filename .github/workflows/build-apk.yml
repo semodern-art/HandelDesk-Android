@@ -9,88 +9,71 @@ jobs:
   build-debug-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle 9.6.0
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.6.0'
 
-      - name: Install stable Android 16 SDK
+      - name: Install Android 16 SDK
         shell: bash
         run: |
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
-          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
 
-      - name: Pin API 36 compatible AndroidX stack
+      - name: Patch alpha build
         shell: bash
         working-directory: HandelDesk_Android_v0.1.0
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
+          sed -i 's/compileSdk = 37/compileSdk = 36/; s/targetSdk = 37/targetSdk = 36/' app/build.gradle.kts
+          sed -i '/composeBom/d' app/build.gradle.kts
+          sed -i 's/activity-compose:1.13.0/activity-compose:1.11.0/' app/build.gradle.kts
+          sed -i 's/lifecycle-runtime-ktx:2.11.0/lifecycle-runtime-ktx:2.9.4/' app/build.gradle.kts
+          sed -i 's/lifecycle-runtime-compose:2.11.0/lifecycle-runtime-compose:2.9.4/' app/build.gradle.kts
+          sed -i 's/lifecycle-viewmodel-compose:2.11.0/lifecycle-viewmodel-compose:2.9.4/' app/build.gradle.kts
+          sed -i 's/navigation-compose:2.10.2/navigation-compose:2.9.8/' app/build.gradle.kts
+          sed -i 's|"androidx.compose.material3:material3"|"androidx.compose.material3:material3:1.3.2"|' app/build.gradle.kts
+          sed -i 's|"androidx.compose.foundation:foundation"|"androidx.compose.foundation:foundation:1.9.4"|' app/build.gradle.kts
+          sed -i 's|"androidx.compose.ui:ui"|"androidx.compose.ui:ui:1.9.4"|' app/build.gradle.kts
+          sed -i 's|"androidx.compose.ui:ui-tooling-preview"|"androidx.compose.ui:ui-tooling-preview:1.9.4"|' app/build.gradle.kts
+          sed -i 's|"androidx.compose.ui:ui-tooling"|"androidx.compose.ui:ui-tooling:1.9.4"|' app/build.gradle.kts
+          sed -i 's|"androidx.compose.ui:ui-test-junit4"|"androidx.compose.ui:ui-test-junit4:1.9.4"|' app/build.gradle.kts
+          sed -i 's|"androidx.compose.ui:ui-test-manifest"|"androidx.compose.ui:ui-test-manifest:1.9.4"|' app/build.gradle.kts
 
-          p = Path("app/build.gradle.kts")
-          s = p.read_text(encoding="utf-8")
-          s = s.replace("compileSdk = 37", "compileSdk = 36")
-          s = s.replace("targetSdk = 37", "targetSdk = 36")
-          s = s.replace('    val composeBom = platform("androidx.compose:compose-bom:2026.09.00")\n', '')
-          s = s.replace('    implementation(composeBom)\n', '')
-          s = s.replace('    androidTestImplementation(composeBom)\n', '')
+          BRIDGE=app/src/main/java/de/handeltheke/handeldesk/data/remote/BridgeClient.kt
+          SEARCH=app/src/main/java/de/handeltheke/handeldesk/data/repo/ProductSearchRepository.kt
+          SCREEN=app/src/main/java/de/handeltheke/handeldesk/ui/screens/ProductScreen.kt
 
-          replacements = {
-              'implementation("androidx.activity:activity-compose:1.13.0")':
-                  'implementation("androidx.activity:activity-compose:1.11.0")',
-              'implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")':
-                  'implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")',
-              'implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")':
-                  'implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")',
-              'implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")':
-                  'implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")',
-              'implementation("androidx.navigation:navigation-compose:2.10.2")':
-                  'implementation("androidx.navigation:navigation-compose:2.9.8")',
-              'implementation("androidx.compose.material3:material3")':
-                  'implementation("androidx.compose.material3:material3:1.3.2")',
-              'implementation("androidx.compose.foundation:foundation")':
-                  'implementation("androidx.compose.foundation:foundation:1.9.4")',
-              'implementation("androidx.compose.ui:ui")':
-                  'implementation("androidx.compose.ui:ui:1.9.4")',
-              'implementation("androidx.compose.ui:ui-tooling-preview")':
-                  'implementation("androidx.compose.ui:ui-tooling-preview:1.9.4")',
-              'debugImplementation("androidx.compose.ui:ui-tooling")':
-                  'debugImplementation("androidx.compose.ui:ui-tooling:1.9.4")',
-              'androidTestImplementation("androidx.compose.ui:ui-test-junit4")':
-                  'androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.9.4")',
-              'debugImplementation("androidx.compose.ui:ui-test-manifest")':
-                  'debugImplementation("androidx.compose.ui:ui-test-manifest:1.9.4")',
-          }
+          sed -i 's/throw@withContext BridgeException/throw BridgeException/g' "$BRIDGE"
+          perl -0pi -e 's/\n        parsed\n    }\n\n    private fun buildUrl/\n        return parsed\n    }\n\n    private fun buildUrl/' "$BRIDGE"
+          sed -i 's/args += values/args.addAll(values)/g' "$SEARCH"
+          sed -i '0,/@Composable/s//@OptIn(ExperimentalMaterial3Api::class)\n@Composable/' "$SCREEN"
 
-          for old, new in replacements.items():
-              if old not in s:
-                  print(f"WARNING: dependency line not found: {old}")
-              s = s.replace(old, new)
+          grep -q 'return parsed' "$BRIDGE"
+          grep -q 'args.addAll(values)' "$SEARCH"
+          grep -q 'OptIn(ExperimentalMaterial3Api' "$SCREEN"
 
-          p.write_text(s, encoding="utf-8")
-          PY
+      - name: Build debug APK
+        working-directory: HandelDesk_Android_v0.1.0
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Apply alpha source fixes
-        shell: bash
+      - name: Verify APK
         working-directory: HandelDesk_Android_v0.1.0
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          sha256sum app/build/outputs/apk/debug/app-debug.apk
 
-          p = Path("app/src/main/java/de/handeltheke/handeldesk/data/remote/BridgeClient.kt")
-          s = p.read_text(encoding="utf-8")
-          s = s.replace("throw@withContext BridgeException", "throw BridgeException")
-          needle = '        parsed\n    }\n\n    private fun buildUrl'
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: HandelDesk-Android-v0.1.0-alpha-debug
+          path: HandelDesk_Android_v0.1.0/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
