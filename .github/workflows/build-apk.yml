@@ -34,7 +34,9 @@ jobs:
         run: |
           test -f ../HandelDesk-v0.1.3-source-patch.tgz
           tar -xzf ../HandelDesk-v0.1.3-source-patch.tgz
+          sed -i 's/import androidx.core.app.ContextCompat/import androidx.core.content.ContextCompat/' app/src/main/java/de/handeltheke/handeldesk/worker/OfflinePrepareService.kt
           grep -q 'versionName = "0.1.3"' app/build.gradle.kts
+          grep -q 'import androidx.core.content.ContextCompat' app/src/main/java/de/handeltheke/handeldesk/worker/OfflinePrepareService.kt
           grep -q 'OfflinePrepareService' app/src/main/java/de/handeltheke/handeldesk/ui/screens/PrepareOfflineScreen.kt
           grep -q 'full_snapshot_after_id' app/src/main/java/de/handeltheke/handeldesk/data/repo/SnapshotRepository.kt
           grep -q 'FOREGROUND_SERVICE_DATA_SYNC' app/src/main/AndroidManifest.xml
