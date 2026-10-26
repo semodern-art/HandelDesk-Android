@@ -34,8 +34,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f ../HandelDesk-v0.1.4-hotfix2-source-patch.tgz
-          tar -xzf ../HandelDesk-v0.1.4-hotfix2-source-patch.tgz
+          test -f ../handeldesk_hotfix2_patch.tgz
+          tar -xzf ../handeldesk_hotfix2_patch.tgz
           grep -q 'versionCode = 6' app/build.gradle.kts
           grep -q 'versionName = "0.1.4-hotfix2"' app/build.gradle.kts
           grep -q 'ПРОВЕРИТЬ OFFLINE API' app/src/main/java/de/handeltheke/handeldesk/ui/screens/SettingsScreen.kt
