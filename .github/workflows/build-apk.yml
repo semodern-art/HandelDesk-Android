@@ -36,7 +36,7 @@ jobs:
           set -euo pipefail
           test -f ../HandelDesk-v0.1.7-source-patch.tgz
           tar -xzf ../HandelDesk-v0.1.7-source-patch.tgz
-          grep -q 'versionName = "0.1.6"' app/build.gradle.kts
+          grep -q 'versionName = "0.1.7"' app/build.gradle.kts
           grep -q 'versionCode = 7' app/build.gradle.kts
           grep -q 'Поиск по названию' app/src/main/java/de/handeltheke/handeldesk/ui/screens/ProductScreen.kt
           grep -q 'Добавить опцию' app/src/main/java/de/handeltheke/handeldesk/ui/screens/ProductScreen.kt
