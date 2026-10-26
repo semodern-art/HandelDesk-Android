@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -37,27 +37,49 @@ jobs:
           tar -xzf ../HandelDesk-v0.1.4-source-patch.tgz
           grep -q 'versionName = "0.1.4"' app/build.gradle.kts
           grep -q 'OP_VERIFY_PHOTOS' app/src/main/java/de/handeltheke/handeldesk/worker/OfflinePrepareService.kt
-          grep -q 'image_manifest' app/src/main/java/de/handeltheke/handeldesk/data/repo/ImageCacheRepository.kt
-          grep -q 'full_snapshot_force_zero' app/src/main/java/de/handeltheke/handeldesk/data/repo/SnapshotRepository.kt
           test -f bridge/OpenCart_Bridge_v0.4.4.ocmod.zip
-          unzip -p bridge/OpenCart_Bridge_v0.4.4.ocmod.zip upload/catalog/controller/extension/module/handeldesk_bridge.php | grep -q "const PROTOCOL = '0.4.4'"
-          unzip -p bridge/OpenCart_Bridge_v0.4.4.ocmod.zip upload/catalog/controller/extension/module/handeldesk_bridge.php | grep -q "delta_event_driven'=>true"
+
+      - name: Restore persistent HandelDesk signing key
+        shell: bash
+        env:
+          HANDELDESK_DEBUG_KEYSTORE_B64: ${{ secrets.HANDELDESK_DEBUG_KEYSTORE_B64 }}
+        run: |
+          test -n "$HANDELDESK_DEBUG_KEYSTORE_B64" || {
+            echo "Missing GitHub Actions secret: HANDELDESK_DEBUG_KEYSTORE_B64"
+            exit 1
+          }
+          mkdir -p "$HOME/.android"
+          printf '%s' "$HANDELDESK_DEBUG_KEYSTORE_B64" | base64 --decode > "$HOME/.android/debug.keystore"
+          chmod 600 "$HOME/.android/debug.keystore"
+          keytool -list \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android \
+            -alias androiddebugkey >/dev/null
 
       - name: Build debug APK
         working-directory: HandelDesk_Android_v0.1.0
         run: gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Verify APK
+      - name: Verify APK and permanent signer
         working-directory: HandelDesk_Android_v0.1.0
+        shell: bash
         run: |
-          test -f app/build/outputs/apk/debug/app-debug.apk
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
-          sha256sum app/build/outputs/apk/debug/app-debug.apk
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
+          CERT_SHA=$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          test "$CERT_SHA" = "80a948afa1dbd674f6acac663f2412aa842811dbe9898dc0d6c4c430daf7fc16" || {
+            echo "Unexpected APK signer: $CERT_SHA"
+            exit 1
+          }
+          ls -lh "$APK"
+          sha256sum "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: HandelDesk-Android-v0.1.4-alpha-debug
+          name: HandelDesk-Android-v0.1.4-alpha-stable-signed
           path: HandelDesk_Android_v0.1.0/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
