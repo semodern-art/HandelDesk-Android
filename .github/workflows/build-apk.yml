@@ -1,3 +1,35 @@
+name: Build HandelDesk Android Hotfix2 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Install Android 16 SDK
+        shell: bash
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
+      - name: Apply v0.1.4-hotfix2 source patch
         working-directory: HandelDesk_Android_v0.1.0
         shell: bash
         run: |
@@ -62,40 +94,3 @@
               s = s.replace(marker, block + marker, 1)
 
           p.write_text(s, encoding="utf-8")
-          PY
-
-          grep -q 'handeldeskPersistentDebug' app/build.gradle.kts
-
-      - name: Build debug APK
-        working-directory: HandelDesk_Android_v0.1.0
-        env:
-          HANDELDESK_KEYSTORE_PATH: ${{ runner.temp }}/handeldesk-debug.jks
-        run: gradle --no-daemon --stacktrace :app:assembleDebug
-
-      - name: Verify APK and permanent signer
-        working-directory: HandelDesk_Android_v0.1.0
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          test -f "$APK"
-
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
-
-          CERT_SHA=$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" \
-            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
-            | tr -d ':' | tr '[:upper:]' '[:lower:]')
-
-          EXPECTED="80a948afa1dbd674f6acac663f2412aa842811dbe9898dc0d6c4c430daf7fc16"
-          echo "APK signer: $CERT_SHA"
-          test "$CERT_SHA" = "$EXPECTED"
-          ls -lh "$APK"
-          sha256sum "$APK"
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: HandelDesk-Android-v0.1.4-hotfix2-stable-signed
-          path: HandelDesk_Android_v0.1.0/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
